@@ -1,0 +1,237 @@
+(define-constant contract-owner tx-sender)
+(define-constant err-owner-only (err u100))
+(define-constant err-not-found (err u101))
+(define-constant err-invalid-treaty (err u102))
+(define-constant err-already-exists (err u103))
+(define-constant err-not-authorized (err u104))
+(define-constant err-amendment-exists (err u105))
+(define-constant err-voting-closed (err u106))
+(define-constant err-insufficient-votes (err u107))
+
+(define-data-var next-treaty-id uint u1)
+(define-data-var next-validator-id uint u1)
+(define-data-var next-amendment-id uint u1)
+
+(define-map treaties
+    { treaty-id: uint }
+    {
+        title: (string-ascii 100),
+        ipfs-hash: (string-ascii 46),
+        timestamp: uint,
+        creator: principal,
+        status: (string-ascii 20),
+        validator-count: uint
+    }
+)
+
+(define-map treaty-validators
+    { treaty-id: uint, validator: principal }
+    { validated: bool }
+)
+
+(define-map validators
+    { address: principal }
+    {
+        reputation: uint,
+        validator-id: uint,
+        active: bool
+    }
+)
+
+(define-map translations
+    { treaty-id: uint, language: (string-ascii 10) }
+    {
+        ipfs-hash: (string-ascii 46),
+        translator: principal,
+        verified: bool
+    }
+)
+
+(define-map amendments
+    { amendment-id: uint }
+    {
+        treaty-id: uint,
+        description: (string-ascii 200),
+        new-ipfs-hash: (string-ascii 46),
+        proposer: principal,
+        votes-for: uint,
+        votes-against: uint,
+        voting-deadline: uint,
+        status: (string-ascii 20)
+    }
+)
+
+(define-map amendment-votes
+    { amendment-id: uint, voter: principal }
+    { vote: bool }
+)
+
+(define-public (register-validator)
+    (let
+        ((validator-id (var-get next-validator-id)))
+        (asserts! (is-none (map-get? validators {address: tx-sender})) err-already-exists)
+        (map-set validators
+            {address: tx-sender}
+            {
+                reputation: u100,
+                validator-id: validator-id,
+                active: true
+            }
+        )
+        (var-set next-validator-id (+ validator-id u1))
+        (ok validator-id)
+    )
+)
+
+(define-public (submit-treaty (title (string-ascii 100)) (ipfs-hash (string-ascii 46)))
+    (let
+        ((treaty-id (var-get next-treaty-id)))
+        (asserts! (is-some (map-get? validators {address: tx-sender})) err-not-authorized)
+        (map-set treaties
+            {treaty-id: treaty-id}
+            {
+                title: title,
+                ipfs-hash: ipfs-hash,
+                timestamp: burn-block-height,
+                creator: tx-sender,
+                status: "pending",
+                validator-count: u0
+            }
+        )
+        (var-set next-treaty-id (+ treaty-id u1))
+        (ok treaty-id)
+    )
+)
+
+(define-public (validate-treaty (treaty-id uint))
+    (let
+        ((validator (unwrap! (map-get? validators {address: tx-sender}) err-not-authorized))
+         (treaty (unwrap! (map-get? treaties {treaty-id: treaty-id}) err-not-found)))
+        (asserts! (is-none (map-get? treaty-validators {treaty-id: treaty-id, validator: tx-sender})) err-already-exists)
+        (map-set treaty-validators
+            {treaty-id: treaty-id, validator: tx-sender}
+            {validated: true}
+        )
+        (map-set treaties
+            {treaty-id: treaty-id}
+            (merge treaty {validator-count: (+ (get validator-count treaty) u1)})
+        )
+        (map-set validators
+            {address: tx-sender}
+            (merge validator {reputation: (+ (get reputation validator) u10)})
+        )
+        (ok true)
+    )
+)
+
+(define-public (add-translation (treaty-id uint) (language (string-ascii 10)) (ipfs-hash (string-ascii 46)))
+    (let
+        ((treaty (unwrap! (map-get? treaties {treaty-id: treaty-id}) err-not-found)))
+        (asserts! (is-some (map-get? validators {address: tx-sender})) err-not-authorized)
+        (map-set translations
+            {treaty-id: treaty-id, language: language}
+            {
+                ipfs-hash: ipfs-hash,
+                translator: tx-sender,
+                verified: false
+            }
+        )
+        (ok true)
+    )
+)
+
+(define-read-only (get-treaty (treaty-id uint))
+    (ok (unwrap! (map-get? treaties {treaty-id: treaty-id}) err-not-found))
+)
+
+(define-read-only (get-translation (treaty-id uint) (language (string-ascii 10)))
+    (ok (unwrap! (map-get? translations {treaty-id: treaty-id, language: language}) err-not-found))
+)
+
+(define-read-only (get-validator-status (address principal))
+    (ok (unwrap! (map-get? validators {address: address}) err-not-found))
+)
+
+(define-public (propose-amendment (treaty-id uint) (description (string-ascii 200)) (new-ipfs-hash (string-ascii 46)) (voting-period uint))
+    (let
+        ((amendment-id (var-get next-amendment-id))
+         (treaty (unwrap! (map-get? treaties {treaty-id: treaty-id}) err-not-found)))
+        (asserts! (is-some (map-get? validators {address: tx-sender})) err-not-authorized)
+        (map-set amendments
+            {amendment-id: amendment-id}
+            {
+                treaty-id: treaty-id,
+                description: description,
+                new-ipfs-hash: new-ipfs-hash,
+                proposer: tx-sender,
+                votes-for: u0,
+                votes-against: u0,
+                voting-deadline: (+ burn-block-height voting-period),
+                status: "voting"
+            }
+        )
+        (var-set next-amendment-id (+ amendment-id u1))
+        (ok amendment-id)
+    )
+)
+
+(define-public (vote-amendment (amendment-id uint) (support bool))
+    (let
+        ((amendment (unwrap! (map-get? amendments {amendment-id: amendment-id}) err-not-found))
+         (validator (unwrap! (map-get? validators {address: tx-sender}) err-not-authorized)))
+        (asserts! (> (get voting-deadline amendment) burn-block-height) err-voting-closed)
+        (asserts! (is-none (map-get? amendment-votes {amendment-id: amendment-id, voter: tx-sender})) err-already-exists)
+        (map-set amendment-votes
+            {amendment-id: amendment-id, voter: tx-sender}
+            {vote: support}
+        )
+        (if support
+            (map-set amendments
+                {amendment-id: amendment-id}
+                (merge amendment {votes-for: (+ (get votes-for amendment) u1)})
+            )
+            (map-set amendments
+                {amendment-id: amendment-id}
+                (merge amendment {votes-against: (+ (get votes-against amendment) u1)})
+            )
+        )
+        (ok true)
+    )
+)
+
+(define-public (finalize-amendment (amendment-id uint))
+    (let
+        ((amendment (unwrap! (map-get? amendments {amendment-id: amendment-id}) err-not-found))
+         (treaty (unwrap! (map-get? treaties {treaty-id: (get treaty-id amendment)}) err-not-found)))
+        (asserts! (<= (get voting-deadline amendment) burn-block-height) err-voting-closed)
+        (asserts! (is-eq (get status amendment) "voting") err-voting-closed)
+        (if (> (get votes-for amendment) (get votes-against amendment))
+            (begin
+                (map-set treaties
+                    {treaty-id: (get treaty-id amendment)}
+                    (merge treaty {ipfs-hash: (get new-ipfs-hash amendment)})
+                )
+                (map-set amendments
+                    {amendment-id: amendment-id}
+                    (merge amendment {status: "approved"})
+                )
+                (ok "approved")
+            )
+            (begin
+                (map-set amendments
+                    {amendment-id: amendment-id}
+                    (merge amendment {status: "rejected"})
+                )
+                (ok "rejected")
+            )
+        )
+    )
+)
+
+(define-read-only (get-amendment (amendment-id uint))
+    (ok (unwrap! (map-get? amendments {amendment-id: amendment-id}) err-not-found))
+)
+
+(define-read-only (get-amendment-vote (amendment-id uint) (voter principal))
+    (ok (map-get? amendment-votes {amendment-id: amendment-id, voter: voter}))
+)
