@@ -7,10 +7,12 @@
 (define-constant err-amendment-exists (err u105))
 (define-constant err-voting-closed (err u106))
 (define-constant err-insufficient-votes (err u107))
+(define-constant err-paused (err u108))
 
 (define-data-var next-treaty-id uint u1)
 (define-data-var next-validator-id uint u1)
 (define-data-var next-amendment-id uint u1)
+(define-data-var paused bool false)
 
 (define-map treaties
     { treaty-id: uint }
@@ -67,76 +69,88 @@
 )
 
 (define-public (register-validator)
-    (let
-        ((validator-id (var-get next-validator-id)))
-        (asserts! (is-none (map-get? validators {address: tx-sender})) err-already-exists)
-        (map-set validators
-            {address: tx-sender}
-            {
-                reputation: u100,
-                validator-id: validator-id,
-                active: true
-            }
+    (begin
+        (asserts! (not (var-get paused)) err-paused)
+        (let
+            ((validator-id (var-get next-validator-id)))
+            (asserts! (is-none (map-get? validators {address: tx-sender})) err-already-exists)
+            (map-set validators
+                {address: tx-sender}
+                {
+                    reputation: u100,
+                    validator-id: validator-id,
+                    active: true
+                }
+            )
+            (var-set next-validator-id (+ validator-id u1))
+            (ok validator-id)
         )
-        (var-set next-validator-id (+ validator-id u1))
-        (ok validator-id)
     )
 )
 
 (define-public (submit-treaty (title (string-ascii 100)) (ipfs-hash (string-ascii 46)))
-    (let
-        ((treaty-id (var-get next-treaty-id)))
-        (asserts! (is-some (map-get? validators {address: tx-sender})) err-not-authorized)
-        (map-set treaties
-            {treaty-id: treaty-id}
-            {
-                title: title,
-                ipfs-hash: ipfs-hash,
-                timestamp: burn-block-height,
-                creator: tx-sender,
-                status: "pending",
-                validator-count: u0
-            }
+    (begin
+        (asserts! (not (var-get paused)) err-paused)
+        (let
+            ((treaty-id (var-get next-treaty-id)))
+            (asserts! (is-some (map-get? validators {address: tx-sender})) err-not-authorized)
+            (map-set treaties
+                {treaty-id: treaty-id}
+                {
+                    title: title,
+                    ipfs-hash: ipfs-hash,
+                    timestamp: burn-block-height,
+                    creator: tx-sender,
+                    status: "pending",
+                    validator-count: u0
+                }
+            )
+            (var-set next-treaty-id (+ treaty-id u1))
+            (ok treaty-id)
         )
-        (var-set next-treaty-id (+ treaty-id u1))
-        (ok treaty-id)
     )
 )
 
 (define-public (validate-treaty (treaty-id uint))
-    (let
-        ((validator (unwrap! (map-get? validators {address: tx-sender}) err-not-authorized))
-         (treaty (unwrap! (map-get? treaties {treaty-id: treaty-id}) err-not-found)))
-        (asserts! (is-none (map-get? treaty-validators {treaty-id: treaty-id, validator: tx-sender})) err-already-exists)
-        (map-set treaty-validators
-            {treaty-id: treaty-id, validator: tx-sender}
-            {validated: true}
+    (begin
+        (asserts! (not (var-get paused)) err-paused)
+        (let
+            ((validator (unwrap! (map-get? validators {address: tx-sender}) err-not-authorized))
+             (treaty (unwrap! (map-get? treaties {treaty-id: treaty-id}) err-not-found)))
+            (asserts! (is-none (map-get? treaty-validators {treaty-id: treaty-id, validator: tx-sender})) err-already-exists)
+            (map-set treaty-validators
+                {treaty-id: treaty-id, validator: tx-sender}
+                {validated: true}
+            )
+            (map-set treaties
+                {treaty-id: treaty-id}
+                (merge treaty {validator-count: (+ (get validator-count treaty) u1)})
+            )
+            (map-set validators
+                {address: tx-sender}
+                (merge validator {reputation: (+ (get reputation validator) u10)})
+            )
+            (ok true)
         )
-        (map-set treaties
-            {treaty-id: treaty-id}
-            (merge treaty {validator-count: (+ (get validator-count treaty) u1)})
-        )
-        (map-set validators
-            {address: tx-sender}
-            (merge validator {reputation: (+ (get reputation validator) u10)})
-        )
-        (ok true)
     )
 )
 
 (define-public (add-translation (treaty-id uint) (language (string-ascii 10)) (ipfs-hash (string-ascii 46)))
-    (let
-        ((treaty (unwrap! (map-get? treaties {treaty-id: treaty-id}) err-not-found)))
-        (asserts! (is-some (map-get? validators {address: tx-sender})) err-not-authorized)
-        (map-set translations
-            {treaty-id: treaty-id, language: language}
-            {
-                ipfs-hash: ipfs-hash,
-                translator: tx-sender,
-                verified: false
-            }
+    (begin
+        (asserts! (not (var-get paused)) err-paused)
+        (let
+            ((treaty (unwrap! (map-get? treaties {treaty-id: treaty-id}) err-not-found)))
+            (asserts! (is-some (map-get? validators {address: tx-sender})) err-not-authorized)
+            (map-set translations
+                {treaty-id: treaty-id, language: language}
+                {
+                    ipfs-hash: ipfs-hash,
+                    translator: tx-sender,
+                    verified: false
+                }
+            )
+            (ok true)
         )
-        (ok true)
     )
 )
 
@@ -153,78 +167,103 @@
 )
 
 (define-public (propose-amendment (treaty-id uint) (description (string-ascii 200)) (new-ipfs-hash (string-ascii 46)) (voting-period uint))
-    (let
-        ((amendment-id (var-get next-amendment-id))
-         (treaty (unwrap! (map-get? treaties {treaty-id: treaty-id}) err-not-found)))
-        (asserts! (is-some (map-get? validators {address: tx-sender})) err-not-authorized)
-        (map-set amendments
-            {amendment-id: amendment-id}
-            {
-                treaty-id: treaty-id,
-                description: description,
-                new-ipfs-hash: new-ipfs-hash,
-                proposer: tx-sender,
-                votes-for: u0,
-                votes-against: u0,
-                voting-deadline: (+ burn-block-height voting-period),
-                status: "voting"
-            }
+    (begin
+        (asserts! (not (var-get paused)) err-paused)
+        (let
+            ((amendment-id (var-get next-amendment-id))
+             (treaty (unwrap! (map-get? treaties {treaty-id: treaty-id}) err-not-found)))
+            (asserts! (is-some (map-get? validators {address: tx-sender})) err-not-authorized)
+            (map-set amendments
+                {amendment-id: amendment-id}
+                {
+                    treaty-id: treaty-id,
+                    description: description,
+                    new-ipfs-hash: new-ipfs-hash,
+                    proposer: tx-sender,
+                    votes-for: u0,
+                    votes-against: u0,
+                    voting-deadline: (+ burn-block-height voting-period),
+                    status: "voting"
+                }
+            )
+            (var-set next-amendment-id (+ amendment-id u1))
+            (ok amendment-id)
         )
-        (var-set next-amendment-id (+ amendment-id u1))
-        (ok amendment-id)
     )
 )
 
 (define-public (vote-amendment (amendment-id uint) (support bool))
-    (let
-        ((amendment (unwrap! (map-get? amendments {amendment-id: amendment-id}) err-not-found))
-         (validator (unwrap! (map-get? validators {address: tx-sender}) err-not-authorized)))
-        (asserts! (> (get voting-deadline amendment) burn-block-height) err-voting-closed)
-        (asserts! (is-none (map-get? amendment-votes {amendment-id: amendment-id, voter: tx-sender})) err-already-exists)
-        (map-set amendment-votes
-            {amendment-id: amendment-id, voter: tx-sender}
-            {vote: support}
-        )
-        (if support
-            (map-set amendments
-                {amendment-id: amendment-id}
-                (merge amendment {votes-for: (+ (get votes-for amendment) u1)})
+    (begin
+        (asserts! (not (var-get paused)) err-paused)
+        (let
+            ((amendment (unwrap! (map-get? amendments {amendment-id: amendment-id}) err-not-found))
+             (validator (unwrap! (map-get? validators {address: tx-sender}) err-not-authorized)))
+            (asserts! (> (get voting-deadline amendment) burn-block-height) err-voting-closed)
+            (asserts! (is-none (map-get? amendment-votes {amendment-id: amendment-id, voter: tx-sender})) err-already-exists)
+            (map-set amendment-votes
+                {amendment-id: amendment-id, voter: tx-sender}
+                {vote: support}
             )
-            (map-set amendments
-                {amendment-id: amendment-id}
-                (merge amendment {votes-against: (+ (get votes-against amendment) u1)})
+            (if support
+                (map-set amendments
+                    {amendment-id: amendment-id}
+                    (merge amendment {votes-for: (+ (get votes-for amendment) u1)})
+                )
+                (map-set amendments
+                    {amendment-id: amendment-id}
+                    (merge amendment {votes-against: (+ (get votes-against amendment) u1)})
+                )
             )
+            (ok true)
         )
-        (ok true)
     )
 )
 
 (define-public (finalize-amendment (amendment-id uint))
-    (let
-        ((amendment (unwrap! (map-get? amendments {amendment-id: amendment-id}) err-not-found))
-         (treaty (unwrap! (map-get? treaties {treaty-id: (get treaty-id amendment)}) err-not-found)))
-        (asserts! (<= (get voting-deadline amendment) burn-block-height) err-voting-closed)
-        (asserts! (is-eq (get status amendment) "voting") err-voting-closed)
-        (if (> (get votes-for amendment) (get votes-against amendment))
-            (begin
-                (map-set treaties
-                    {treaty-id: (get treaty-id amendment)}
-                    (merge treaty {ipfs-hash: (get new-ipfs-hash amendment)})
+    (begin
+        (asserts! (not (var-get paused)) err-paused)
+        (let
+            ((amendment (unwrap! (map-get? amendments {amendment-id: amendment-id}) err-not-found))
+             (treaty (unwrap! (map-get? treaties {treaty-id: (get treaty-id amendment)}) err-not-found)))
+            (asserts! (<= (get voting-deadline amendment) burn-block-height) err-voting-closed)
+            (asserts! (is-eq (get status amendment) "voting") err-voting-closed)
+            (if (> (get votes-for amendment) (get votes-against amendment))
+                (begin
+                    (map-set treaties
+                        {treaty-id: (get treaty-id amendment)}
+                        (merge treaty {ipfs-hash: (get new-ipfs-hash amendment)})
+                    )
+                    (map-set amendments
+                        {amendment-id: amendment-id}
+                        (merge amendment {status: "approved"})
+                    )
+                    (ok "approved")
                 )
-                (map-set amendments
-                    {amendment-id: amendment-id}
-                    (merge amendment {status: "approved"})
+                (begin
+                    (map-set amendments
+                        {amendment-id: amendment-id}
+                        (merge amendment {status: "rejected"})
+                    )
+                    (ok "rejected")
                 )
-                (ok "approved")
-            )
-            (begin
-                (map-set amendments
-                    {amendment-id: amendment-id}
-                    (merge amendment {status: "rejected"})
-                )
-                (ok "rejected")
             )
         )
+    )
+)
+
+(define-public (pause-contract)
+    (begin
+        (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+        (var-set paused true)
+        (ok true)
+    )
+)
+
+(define-public (unpause-contract)
+    (begin
+        (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+        (var-set paused false)
+        (ok true)
     )
 )
 
