@@ -8,10 +8,12 @@
 (define-constant err-voting-closed (err u106))
 (define-constant err-insufficient-votes (err u107))
 (define-constant err-paused (err u108))
+(define-constant err-violation-not-found (err u109))
 
 (define-data-var next-treaty-id uint u1)
 (define-data-var next-validator-id uint u1)
 (define-data-var next-amendment-id uint u1)
+(define-data-var next-violation-id uint u1)
 (define-data-var paused bool false)
 
 (define-map treaties
@@ -66,6 +68,17 @@
 (define-map amendment-votes
     { amendment-id: uint, voter: principal }
     { vote: bool }
+)
+
+(define-map violations
+    { violation-id: uint }
+    {
+        treaty-id: uint,
+        reporter: principal,
+        description: (string-ascii 200),
+        status: (string-ascii 20),
+        reviewed-by: (optional principal)
+    }
 )
 
 (define-public (register-validator)
@@ -267,10 +280,57 @@
     )
 )
 
+(define-public (report-violation (treaty-id uint) (description (string-ascii 200)))
+    (begin
+        (asserts! (not (var-get paused)) err-paused)
+        (let
+            ((violation-id (var-get next-violation-id)))
+            (asserts! (is-some (map-get? treaties {treaty-id: treaty-id})) err-not-found)
+            (map-set violations
+                {violation-id: violation-id}
+                {
+                    treaty-id: treaty-id,
+                    reporter: tx-sender,
+                    description: description,
+                    status: "pending",
+                    reviewed-by: none
+                }
+            )
+            (var-set next-violation-id (+ violation-id u1))
+            (ok violation-id)
+        )
+    )
+)
+
+(define-public (review-violation (violation-id uint) (confirm bool))
+    (begin
+        (asserts! (not (var-get paused)) err-paused)
+        (let
+            ((violation (unwrap! (map-get? violations {violation-id: violation-id}) err-violation-not-found))
+             (validator (unwrap! (map-get? validators {address: tx-sender}) err-not-authorized)))
+            (asserts! (is-eq (get status violation) "pending") err-already-exists)
+            (map-set violations
+                {violation-id: violation-id}
+                (merge violation
+                    {
+                        status: (if confirm "confirmed" "rejected"),
+                        reviewed-by: (some tx-sender)
+                    }
+                )
+            )
+            (ok true)
+        )
+    )
+)
+
 (define-read-only (get-amendment (amendment-id uint))
     (ok (unwrap! (map-get? amendments {amendment-id: amendment-id}) err-not-found))
 )
 
 (define-read-only (get-amendment-vote (amendment-id uint) (voter principal))
     (ok (map-get? amendment-votes {amendment-id: amendment-id, voter: voter}))
+)
+
+(define-read-only (get-violation (violation-id uint))
+    (ok (unwrap! (map-get? violations {violation-id: violation-id}) err-violation-not-found))
 )

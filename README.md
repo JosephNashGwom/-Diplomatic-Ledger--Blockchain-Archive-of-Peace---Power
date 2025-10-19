@@ -52,6 +52,37 @@ A decentralized platform preserving diplomatic history and peace agreements on t
 
 Feel free to submit issues and enhancement requests!
 
+## 🚨 Treaty Violation Reporting System
+
+- 📢 Community-driven violation reporting for enhanced treaty compliance monitoring
+- ✅ Validator-reviewed confirmation process ensuring credible oversight
+- 🔍 Transparent audit trail of all reports and reviews
+
+### Contract Functions (Additions)
+
+7. **Report Violation**
+```clarity
+(contract-call? .diplomatic-ledger report-violation treaty-id "violation-description")
+```
+
+8. **Review Violation** (Validators Only)
+```clarity
+(contract-call? .diplomatic-ledger review-violation violation-id true)
+```
+
+## 📖 Read-Only Functions (Additions)
+
+- `get-violation`: Retrieve violation report details
+
+## 🔐 Security (Additions)
+
+- Validator-exclusive review rights prevent unauthorized confirmations
+- Immutable reporting history maintains integrity of diplomatic records
+
+## 🤝 Contributing (Additions)
+
+New feature added: Treaty Violation Reporting System for proactive compliance monitoring.
+
 ```
 
 Git commit message:
