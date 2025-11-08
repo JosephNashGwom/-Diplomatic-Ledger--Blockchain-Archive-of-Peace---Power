@@ -179,4 +179,76 @@ This PR revolutionizes contract security with a cutting-edge emergency pause mec
 This feature transforms our diplomatic ledger into a fortress of security, ensuring peace agreements remain protected even in the face of unforeseen challenges. Let's build a safer blockchain future together! 🌍✨
 
 #BlockchainSecurity #SmartContractSafety #EmergencyProtocols #StacksBlockchain #DiplomaticLedger
+
+## ⏰ Treaty Expiration Management System
+
+- 📅 Time-bound treaty validity with configurable expiration blocks
+- 🔄 Creator-controlled extension capabilities for ongoing agreements
+- 🔍 Real-time expiration status checking for compliance monitoring
+- 🛡️ Prevents outdated treaty enforcement and ensures diplomatic relevance
+
+### Contract Functions (Additions)
+
+9. **Submit Treaty** (Updated)
+```clarity
+(contract-call? .diplomatic-ledger submit-treaty "Treaty Title" "ipfs-hash" expiration-blocks)
+```
+
+10. **Extend Treaty Expiration** (Creator Only)
+```clarity
+(contract-call? .diplomatic-ledger extend-treaty-expiration treaty-id new-expiration-blocks)
+```
+
+## 📖 Read-Only Functions (Additions)
+
+- `is-treaty-expired`: Check if a treaty has reached its expiration date
+
+## 🔐 Security (Additions)
+
+- Expiration-based access controls prevent actions on expired treaties
+- Creator-exclusive extension rights maintain treaty integrity
+- Time-sensitive validation ensures diplomatic agreements remain current
+
+## 🤝 Contributing (Additions)
+
+New feature added: Treaty Expiration Management System for time-sensitive diplomatic agreements.
+
+```
+
+Git commit message for new feature:
+```
+feat: introduce treaty expiration management for time-bound diplomatic agreements
+```
+
+PR Title for new feature:
+```
+⏰ Revolutionize Diplomatic Agreements with Treaty Expiration Management
+```
+
+PR Description for new feature:
+```
+This PR transforms our diplomatic ledger with an innovative treaty expiration management system! 🚀
+
+🔥 **Key Innovations:**
+- Block-height based expiration tracking for precise time control
+- Creator-authorized extension mechanism for flexible agreement renewal
+- Real-time expiration status queries for instant compliance checks
+- Seamless integration with existing treaty lifecycle
+
+🛡️ **Security & Compliance:**
+- Automatic expiration prevents enforcement of outdated agreements
+- Creator-controlled extensions maintain diplomatic sovereignty
+- Transparent expiration metadata enhances auditability
+- Prevents potential conflicts from indefinite treaty validity
+
+💡 **Technical Highlights:**
+- Minimal storage overhead with efficient uint expiration fields
+- Backward-compatible design preserving existing treaty structures
+- Gas-optimized read-only expiration checks
+- Clean error handling for expired treaty interactions
+
+This breakthrough feature ensures diplomatic agreements stay relevant and enforceable, creating a dynamic ecosystem where peace treaties evolve with changing global landscapes. Let's build a more adaptive and responsible international relations framework! 🌍✨
+
+#TreatyExpiration #DiplomaticInnovation #TimeBoundAgreements #BlockchainGovernance #StacksBlockchain #DiplomaticLedger
+```
 ```

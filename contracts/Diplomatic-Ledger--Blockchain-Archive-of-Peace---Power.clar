@@ -24,7 +24,8 @@
         timestamp: uint,
         creator: principal,
         status: (string-ascii 20),
-        validator-count: uint
+        validator-count: uint,
+        expiration: uint
     }
 )
 
@@ -101,7 +102,7 @@
     )
 )
 
-(define-public (submit-treaty (title (string-ascii 100)) (ipfs-hash (string-ascii 46)))
+(define-public (submit-treaty (title (string-ascii 100)) (ipfs-hash (string-ascii 46)) (expiration uint))
     (begin
         (asserts! (not (var-get paused)) err-paused)
         (let
@@ -115,7 +116,8 @@
                     timestamp: burn-block-height,
                     creator: tx-sender,
                     status: "pending",
-                    validator-count: u0
+                    validator-count: u0,
+                    expiration: expiration
                 }
             )
             (var-set next-treaty-id (+ treaty-id u1))
@@ -333,4 +335,27 @@
 
 (define-read-only (get-violation (violation-id uint))
     (ok (unwrap! (map-get? violations {violation-id: violation-id}) err-violation-not-found))
+)
+
+(define-public (extend-treaty-expiration (treaty-id uint) (new-expiration uint))
+    (begin
+        (asserts! (not (var-get paused)) err-paused)
+        (let
+            ((treaty (unwrap! (map-get? treaties {treaty-id: treaty-id}) err-not-found)))
+            (asserts! (is-eq (get creator treaty) tx-sender) err-not-authorized)
+            (asserts! (> new-expiration (get expiration treaty)) err-invalid-treaty)
+            (map-set treaties
+                {treaty-id: treaty-id}
+                (merge treaty {expiration: new-expiration})
+            )
+            (ok true)
+        )
+    )
+)
+
+(define-read-only (is-treaty-expired (treaty-id uint))
+    (let
+        ((treaty (unwrap! (map-get? treaties {treaty-id: treaty-id}) err-not-found)))
+        (ok (> burn-block-height (get expiration treaty)))
+    )
 )
