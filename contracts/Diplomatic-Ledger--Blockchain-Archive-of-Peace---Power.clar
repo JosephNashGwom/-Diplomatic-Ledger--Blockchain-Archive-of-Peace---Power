@@ -9,6 +9,7 @@
 (define-constant err-insufficient-votes (err u107))
 (define-constant err-paused (err u108))
 (define-constant err-violation-not-found (err u109))
+(define-constant err-already-inactive (err u110))
 
 (define-data-var next-treaty-id uint u1)
 (define-data-var next-validator-id uint u1)
@@ -98,6 +99,22 @@
             )
             (var-set next-validator-id (+ validator-id u1))
             (ok validator-id)
+        )
+    )
+)
+
+(define-public (deactivate-validator (validator-address principal))
+    (begin
+        (asserts! (not (var-get paused)) err-paused)
+        (asserts! (or (is-eq tx-sender validator-address) (is-eq tx-sender contract-owner)) err-not-authorized)
+        (let
+            ((validator (unwrap! (map-get? validators {address: validator-address}) err-not-found)))
+            (asserts! (get active validator) err-already-inactive)
+            (map-set validators
+                {address: validator-address}
+                (merge validator {active: false})
+            )
+            (ok true)
         )
     )
 )

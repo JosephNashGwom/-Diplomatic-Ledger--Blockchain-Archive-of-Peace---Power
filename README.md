@@ -250,5 +250,67 @@ This PR transforms our diplomatic ledger with an innovative treaty expiration ma
 This breakthrough feature ensures diplomatic agreements stay relevant and enforceable, creating a dynamic ecosystem where peace treaties evolve with changing global landscapes. Let's build a more adaptive and responsible international relations framework! 🌍✨
 
 #TreatyExpiration #DiplomaticInnovation #TimeBoundAgreements #BlockchainGovernance #StacksBlockchain #DiplomaticLedger
+
+## 🔄 Validator Deactivation System
+
+- 🛑 Self-service deactivation for validators to voluntarily step down
+- 👑 Owner-authorized deactivation for removing inactive or compromised accounts
+- 🛡️ Enhanced security by preventing participation from unreliable validators
+- 🔍 Transparent status tracking with active/inactive validator states
+
+### Contract Functions (Additions)
+
+11. **Deactivate Validator**
+```clarity
+(contract-call? .diplomatic-ledger deactivate-validator validator-address)
+```
+
+## 🔐 Security (Additions)
+
+- Dual authorization (self or owner) for validator deactivation
+- Active status checks prevent redundant deactivation attempts
+- Maintains validator integrity by enabling removal of problematic accounts
+
+## 🤝 Contributing (Additions)
+
+New feature added: Validator Deactivation System for improved validator management and security.
+
+```
+
+Git commit message for new feature:
+```
+feat: add validator deactivation functionality for enhanced security
+```
+
+PR Title for new feature:
+```
+🔄 Empower Validator Management with Deactivation Feature
+```
+
+PR Description for new feature:
+```
+This PR introduces a robust validator deactivation mechanism to elevate the Diplomatic Ledger's security and reliability! 🚀
+
+🔥 **Key Innovations:**
+- Self-deactivation option allowing validators to gracefully exit the system
+- Owner override capability for proactive management of inactive accounts
+- Seamless integration with existing validator status and reputation systems
+- Minimal overhead with efficient boolean flag updates
+
+🛡️ **Security Enhancements:**
+- Prevents compromised validators from influencing treaty validations
+- Enables quick response to security incidents or validator misconduct
+- Maintains ecosystem trust through accountable participant management
+- Reduces risks from dormant or malicious validator accounts
+
+💡 **Technical Highlights:**
+- Clean authorization logic supporting both self and owner-initiated deactivation
+- Backward-compatible design with existing validator data structures
+- Gas-efficient operations with targeted state modifications
+- Comprehensive error handling for invalid deactivation attempts
+
+This feature fortifies our diplomatic ledger against potential threats, ensuring only active and trustworthy validators contribute to the validation process. Together, we're building a more secure and accountable blockchain platform for international diplomacy! 🌍✨
+
+#ValidatorManagement #BlockchainSecurity #SmartContractGovernance #DiplomaticLedger #StacksBlockchain
 ```
 ```
